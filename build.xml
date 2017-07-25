@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="portfolio" default="setup:install">
+
+    <property file="./build.properties"/>
+
+    <target name="setup:install"
+            depends="setup:vendors, database:install, cache:clear"
+            description="First install after the first clone"/>
+
+    <target name="setup:vendors" description="Remove and download latest version of all vendors">
+        <echo msg="Updating vendors..."/>
+        <delete dir="vendors"/>
+        <exec passthru="true" logoutput="true" checkreturn="true" command="composer install --ansi" />
+        <exec passthru="true" checkreturn="true" command="npm install" />
+    </target>
+
+    <target name="setup:run" description="Run server with hot reload">
+        <exec passthru="true" logoutput="true" checkreturn="true" command="${bin.dir}/console server:run" spawn="true"/>
+        <exec passthru="true" logoutput="true" checkreturn="true" command="npm run serve" />
+    </target>
+
+    <target name="database:install" description="Reloads the database">
+        <echo msg="Restarting database and populating it..."/>
+        <exec passthru="true" checkreturn="false" command="${bin.dir}/console doctrine:database:drop --quiet --force"/>
+        <exec passthru="true" checkreturn="true" command="${bin.dir}/console doctrine:database:create --quiet"/>
+        <exec passthru="true" checkreturn="true" command="${bin.dir}/console doctrine:schema:update --force"/>
+        <exec passthru="true" checkreturn="true" command="${bin.dir}/console hautelook:fixtures:load --quiet"/>
+    </target>
+
+    <target name="cache:clear" description="Erasing cache">
+        <echo msg="Erasing cache..."/>
+        <delete includeemptydirs="true">
+            <fileset dir="${var.dir}/cache">
+                <exclude name=".gitkeep"/>
+            </fileset>
+        </delete>
+    </target>
+
+    <target name="qa:build"
+            depends="qa:clean,qa:prepare"
+            description="Running the pdepend, phpmd, phpcpd, phpcs, phpdoc and phploc tasks in parallel.">
+        <parallel threadCount="2">
+            <phingcall target="qa:pdepend"/>
+            <phingcall target="qa:phpmd"/>
+            <phingcall target="qa:phpcpd"/>
+            <phingcall target="qa:phploc"/>
+            <phingcall target="qa:phpcs"/>
+            <phingcall target="qa:phpdoc"/>
+            <phingcall target="qa:phpcb"/>
+        </parallel>
+    </target>
+
+    <target name="qa:clean" description="Clean up and create artifact directories">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="qa:prepare" description="Clean up and create artifact directories">
+        <mkdir dir="${build.dir}/api"/>
+        <mkdir dir="${build.dir}/code-browser"/>
+        <mkdir dir="${build.dir}/logs"/>
+        <mkdir dir="${build.dir}/pdepend"/>
+    </target>
+
+    <target name="qa:pdepend" description="Generate jdepend.xml and software metrics charts using PHP_Depend">
+        <exec executable="${bin.dir}/pdepend" checkreturn="true">
+            <arg line="--jdepend-xml=${build.dir}/logs/jdepend.xml
+              --jdepend-chart=${build.dir}/pdepend/dependencies.svg
+              --overview-pyramid=${build.dir}/pdepend/overview-pyramid.svg
+              ${source}" />
+        </exec>
+    </target>
+
+    <target name="qa:phpmd" description="Generate pmd.xml using PHPMD">
+        <exec executable="${bin.dir}/phpmd" passthru="true" checkreturn="false">
+            <arg line="${source} text .phpmd.xml"/>
+        </exec>
+    </target>
+
+    <target name="qa:phpcpd" description="Generate copy paste report using PHPCPD">
+        <exec executable="${bin.dir}/phpcpd" passthru="true" checkreturn="true">
+            <arg line="${source}" />
+        </exec>
+    </target>
+
+    <target name="qa:phploc" description="Generate phploc.csv">
+        <exec executable="${bin.dir}/phploc" checkreturn="true">
+            <arg line="--log-xml ${build.dir}/logs/phploc.xml --log-csv ${build.dir}/logs/phploc.csv ${source}" />
+        </exec>
+    </target>
+
+    <target name="qa:phpcs" description="Generate style report using PHP_CodeSniffer">
+        <exec executable="${bin.dir}/phpcs" passthru="true" checkreturn="true">
+            <arg line="--standard=vendor/m6web/symfony2-coding-standard/Symfony2
+              --extensions=php
+              ${source}" />
+        </exec>
+    </target>
+
+    <target name="qa:phpdoc" description="Generate API documentation using PHPDocumentor">
+        <exec executable="${bin.dir}/phpdoc" checkreturn="true">
+            <arg line="-d ${source} -t ${build.dir}/api" />
+        </exec>
+    </target>
+
+    <target name="qa:phpcb" description="Aggregate tool output with PHP_CodeBrowser">
+        <exec executable="bin/phpcb" checkreturn="true">
+            <arg line="--log ${build.dir}/logs --source ${source} --output ${build.dir}/code-browser" />
+        </exec>
+    </target>
+
+</project>

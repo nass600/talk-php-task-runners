@@ -1,0 +1,4 @@
+AppBundle\Entity\Repository:
+    dummy_{1..10}:
+        name: <name()>
+        description: 'This is a description'
